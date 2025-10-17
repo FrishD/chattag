@@ -36,6 +36,10 @@ const commands = [
         .addUserOption(option =>
             option.setName('owner')
                 .setDescription('The owner of the tag')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('color')
+                .setDescription('The hex color code for the tag (e.g., #FF0000)')
                 .setRequired(true)),
     new SlashCommandBuilder()
         .setName('chattagstatus')
@@ -111,6 +115,7 @@ client.on('interactionCreate', async interaction => {
         const role = interaction.options.getRole('role');
         const slots = interaction.options.getNumber('slots');
         const owner = interaction.options.getUser('owner');
+        const color = interaction.options.getString('color');
 
         const chattags = JSON.parse(fs.readFileSync(chattagsPath));
 
@@ -118,7 +123,8 @@ client.on('interactionCreate', async interaction => {
             name: name,
             tag: tag,
             owner: owner.id,
-            slots: slots
+            slots: slots,
+            color: color
         };
 
         fs.writeFileSync(chattagsPath, JSON.stringify(chattags, null, 4));

@@ -108,7 +108,7 @@ local function unregisterHooks(resource)
     end
 end
 
-local function routeMessage(source, author, message, mode, fromConsole)
+local function routeMessage(source, author, message, mode, fromConsole, tagData)
     if source >= 1 then
         author = GetPlayerName(source)
     end
@@ -117,7 +117,9 @@ local function routeMessage(source, author, message, mode, fromConsole)
         color = { 255, 255, 255 },
         multiline = true,
         args = { message },
-        mode = mode
+        mode = mode,
+        tag = tagData.tag,
+        tagColor = tagData.color
     }
 
     if author ~= "" then
@@ -207,8 +209,9 @@ AddEventHandler('_chat:messageEntered', function(author, color, message, mode)
     end
 
     local source = source
+    local tagData = exports[Config.ChatRoles.GetTagExport](source)
 
-    routeMessage(source, author, message, mode)
+    routeMessage(source, author, message, mode, false, tagData)
 end)
 
 AddEventHandler('__cfx_internal:commandFallback', function(command)
@@ -309,26 +312,27 @@ end, true)
 
 local SelectedTags = {}
 exports(Config.ChatRoles.GetTagExport, function(Player)
-    local Tag = nil
-    if SelectedTags[Player] ~= nil then
-        Tag = SelectedTags[Player]
+    if SelectedTags[Player] then
+        return SelectedTags[Player]
     else
-        Tag = Config.ChatRoles.DefaultTag
+        return { tag = Config.ChatRoles.DefaultTag, color = "#FFFFFF" }
     end
-    return(Tag)
 end)
 
 RegisterServerEvent('ChatRoles:Change')
 AddEventHandler('ChatRoles:Change', function(ID)
-    local Tag = nil
-    if chatTags[tostring(ID)] then
-        Tag = chatTags[tostring(ID)].tag
+    local tagData = chatTags[tostring(ID)]
+    if tagData then
+        SelectedTags[source] = {
+            tag = tagData.tag,
+            color = tagData.color
+        }
+    else
+        SelectedTags[source] = {
+            tag = Config.ChatRoles.DefaultTag,
+            color = "#FFFFFF"
+        }
     end
-
-    if Tag == nil then
-        Tag = Config.ChatRoles.DefaultTag
-    end
-    SelectedTags[source] = Tag
     TriggerClientEvent('chat:addMessage', source, {
         color = { 255, 0, 0 },
         args = { "System", "Chat tag changed." }

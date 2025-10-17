@@ -26,6 +26,11 @@ Vue.component('message', {
         }
         return argEscaped;
       });
+
+      if (this.tag) {
+        s = `<span style="color: ${this.tagColor}">${this.tag}</span> ${s}`;
+      }
+
       return this.colorize(s);
     },
   },
@@ -81,6 +86,14 @@ Vue.component('message', {
     color: { //deprecated
       type: Array,
       default: false,
+    },
+    tag: {
+      type: String,
+      default: null,
+    },
+    tagColor: {
+      type: String,
+      default: '#FFFFFF',
     },
   },
 });
