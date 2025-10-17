@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -55,6 +55,9 @@ const commands = [
             option.setName('role')
                 .setDescription('The role to give')
                 .setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('sendtagpanel')
+        .setDescription('Sends the chat tag management panel to the channel.'),
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
@@ -101,11 +104,10 @@ client.on('ready', async () => {
 });
 
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
+    if (interaction.isChatInputCommand()) {
+        const { commandName } = interaction;
 
-    const { commandName } = interaction;
-
-    if (commandName === 'createnewtag') {
+        if (commandName === 'createnewtag') {
         if (!interaction.member.roles.cache.has(PERMISSION_ROLE_ID)) {
             return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
@@ -193,6 +195,129 @@ client.on('interactionCreate', async interaction => {
         await member.roles.add(roleToGive);
 
         await interaction.editReply({ content: `Gave the ${roleToGive.name} role to ${user.tag}.` });
+    } else if (commandName === 'sendtagpanel') {
+        if (!interaction.member.roles.cache.has(PERMISSION_ROLE_ID)) {
+            return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+        }
+
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('chattagstatus_button')
+                    .setLabel('Check My Tags')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId('givetag_button')
+                    .setLabel('Give Tag')
+                    .setStyle(ButtonStyle.Success),
+            );
+
+        const channel = await client.channels.fetch(CHAT_TAG_CHANNEL_ID);
+        if (channel) {
+            await channel.send({
+                content: 'Chat Tag Management',
+                components: [row]
+            });
+            await interaction.reply({ content: 'Panel sent.', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'Could not find the channel.', ephemeral: true });
+        }
+    }
+    } else if (interaction.isButton()) {
+        if (interaction.customId === 'chattagstatus_button') {
+            await interaction.deferReply({ ephemeral: true });
+            const chattags = JSON.parse(fs.readFileSync(chattagsPath));
+            const userTags = [];
+            for (const roleId in chattags) {
+                const tag = chattags[roleId];
+                if (tag.owner === interaction.user.id) {
+                    const role = await interaction.guild.roles.fetch(roleId);
+                    const members = await interaction.guild.members.fetch();
+                    const membersWithRole = members.filter(member => member.roles.cache.has(role.id));
+                    userTags.push({ ...tag, roleName: role.name, usedSlots: membersWithRole.size });
+                }
+            }
+
+            if (userTags.length === 0) {
+                return interaction.editReply({ content: 'You are not the owner of any chat tags.' });
+            }
+
+            const embeds = userTags.map(tag => {
+                const availableSlots = tag.slots - tag.usedSlots;
+                return {
+                    title: tag.name,
+                    fields: [
+                        { name: 'Role', value: tag.roleName, inline: true },
+                        { name: 'Total Slots', value: `${tag.slots}`, inline: true },
+                        { name: 'Available Slots', value: `${availableSlots > 0 ? availableSlots : 'FULL'}`, inline: true },
+                    ],
+                    color: 0x00ff00
+                };
+            });
+
+            await interaction.editReply({ embeds: embeds });
+        } else if (interaction.customId === 'givetag_button') {
+            if (!interaction.member.roles.cache.has(PERMISSION_ROLE_ID)) {
+                return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+            }
+
+            const modal = new ModalBuilder()
+                .setCustomId('givetag_modal')
+                .setTitle('Give Chat Tag');
+
+            const userIdInput = new TextInputBuilder()
+                .setCustomId('userId')
+                .setLabel("User's Discord ID")
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+
+            const roleIdInput = new TextInputBuilder()
+                .setCustomId('roleId')
+                .setLabel("Role ID")
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+
+            const firstActionRow = new ActionRowBuilder().addComponents(userIdInput);
+            const secondActionRow = new ActionRowBuilder().addComponents(roleIdInput);
+
+            modal.addComponents(firstActionRow, secondActionRow);
+
+            await interaction.showModal(modal);
+        }
+    } else if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'givetag_modal') {
+            await interaction.deferReply({ ephemeral: true });
+
+            const userId = interaction.fields.getTextInputValue('userId');
+            const roleId = interaction.fields.getTextInputValue('roleId');
+
+            const roleToGive = await interaction.guild.roles.fetch(roleId);
+            if (!roleToGive) {
+                return interaction.editReply({ content: 'Invalid Role ID.' });
+            }
+
+            const chattags = JSON.parse(fs.readFileSync(chattagsPath));
+            const tag = chattags[roleToGive.id];
+
+            if (!tag) {
+                return interaction.editReply({ content: 'This role is not a chat tag role.' });
+            }
+
+            const members = await interaction.guild.members.fetch();
+            const membersWithRole = members.filter(member => member.roles.cache.has(roleToGive.id));
+
+            if (membersWithRole.size >= tag.slots) {
+                return interaction.editReply({ content: 'There are no available slots for this chat tag.' });
+            }
+
+            const member = await interaction.guild.members.fetch(userId);
+            if (!member) {
+                return interaction.editReply({ content: 'Invalid User ID.' });
+            }
+            await member.roles.add(roleToGive);
+
+            await interaction.editReply({ content: `Gave the ${roleToGive.name} role to ${member.user.tag}.` });
+        }
     }
 });
 
