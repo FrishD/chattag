@@ -110,6 +110,8 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
 
+        await interaction.deferReply({ ephemeral: true });
+
         const name = interaction.options.getString('name');
         const tag = interaction.options.getString('tag');
         const role = interaction.options.getRole('role');
@@ -129,8 +131,9 @@ client.on('interactionCreate', async interaction => {
 
         fs.writeFileSync(chattagsPath, JSON.stringify(chattags, null, 4));
 
-        await interaction.reply({ content: `Chat tag ${name} created with role ${role.name} and ${slots} slots.`, ephemeral: true });
+        await interaction.editReply({ content: `Chat tag ${name} created with role ${role.name} and ${slots} slots.` });
     } else if (commandName === 'chattagstatus') {
+        await interaction.deferReply({ ephemeral: true });
         const chattags = JSON.parse(fs.readFileSync(chattagsPath));
         const userTags = [];
         for (const roleId in chattags) {
@@ -144,7 +147,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (userTags.length === 0) {
-            return interaction.reply({ content: 'You are not the owner of any chat tags.', ephemeral: true });
+            return interaction.editReply({ content: 'You are not the owner of any chat tags.' });
         }
 
         const embeds = userTags.map(tag => {
@@ -160,12 +163,14 @@ client.on('interactionCreate', async interaction => {
             };
         });
 
-        await interaction.reply({ embeds: embeds, ephemeral: true });
+        await interaction.editReply({ embeds: embeds });
 
     } else if (commandName === 'givetag') {
         if (!interaction.member.roles.cache.has(PERMISSION_ROLE_ID)) {
             return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
         }
+
+        await interaction.deferReply({ ephemeral: true });
 
         const user = interaction.options.getUser('user');
         const roleToGive = interaction.options.getRole('role');
@@ -174,20 +179,20 @@ client.on('interactionCreate', async interaction => {
         const tag = chattags[roleToGive.id];
 
         if (!tag) {
-            return interaction.reply({ content: 'This role is not a chat tag role.', ephemeral: true });
+            return interaction.editReply({ content: 'This role is not a chat tag role.' });
         }
 
         const members = await interaction.guild.members.fetch();
         const membersWithRole = members.filter(member => member.roles.cache.has(roleToGive.id));
 
         if (membersWithRole.size >= tag.slots) {
-            return interaction.reply({ content: 'There are no available slots for this chat tag.', ephemeral: true });
+            return interaction.editReply({ content: 'There are no available slots for this chat tag.' });
         }
 
         const member = await interaction.guild.members.fetch(user.id);
         await member.roles.add(roleToGive);
 
-        await interaction.reply({ content: `Gave the ${roleToGive.name} role to ${user.tag}.`, ephemeral: true });
+        await interaction.editReply({ content: `Gave the ${roleToGive.name} role to ${user.tag}.` });
     }
 });
 
