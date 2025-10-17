@@ -14,7 +14,12 @@
     "vue": "^2.6.11",
     "vue-loader": "^15.9.0",
     "vue-template-compiler": "^2.6.11",
-    "webpack": "4"
+    "webpack": "4",
+    "discord.js": "^14.11.0",
+    "fs": "^0.0.1-security"
+  },
+  "scripts": {
+    "start": "node discord.js"
   },
   "devDependencies": {
     "command-line-args": "^5.1.1",

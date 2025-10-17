@@ -108,6 +108,38 @@ local function unregisterHooks(resource)
     end
 end
 
+-- chat tags
+local Tags = {}
+local SelectedTags = {}
+
+function hexToRgb(hex)
+    hex = hex:gsub("#", "")
+    return tonumber("0x" .. hex:sub(1, 2)), tonumber("0x" .. hex:sub(3, 4)), tonumber("0x" .. hex:sub(5, 6))
+end
+
+function getTag(player)
+    local roles = exports.chat:GetDiscordRoles(player)
+    if not roles then return nil end
+
+    for _, tag in ipairs(Tags) do
+        for _, roleId in ipairs(roles) do
+            if roleId == tag.roleId then
+                return tag
+            end
+        end
+    end
+
+    return nil
+end
+
+function refreshTags()
+    local file = LoadResourceFile(GetCurrentResourceName(), "chattags.json")
+    if file then
+        Tags = json.decode(file)
+    end
+end
+
+
 local function routeMessage(source, author, message, mode, fromConsole)
     if source >= 1 then
         author = GetPlayerName(source)
@@ -121,7 +153,13 @@ local function routeMessage(source, author, message, mode, fromConsole)
     }
 
     if author ~= "" then
-        outMessage.args = { author, message }
+        local tag = SelectedTags[source]
+        if tag then
+            outMessage.template = '<div style="color: rgb(' .. tag.color[1] .. ', ' .. tag.color[2] .. ', ' .. tag.color[3] .. '); display: inline-block; margin-right: 5px;">[' .. tag.tag .. ']</div> <strong>{0}:</strong> {1}'
+            outMessage.args = { author, message }
+        else
+            outMessage.args = { author, message }
+        end
     end
 
     if mode and modes[mode] then
@@ -262,8 +300,8 @@ local function refreshCommands(player)
 end
 
 AddEventHandler('chat:init', function()
-    local source = source
-    refreshCommands(source)
+    local player = source
+    refreshCommands(player)
 
     for _, modeData in pairs(modes) do
         local clObj = {
@@ -278,15 +316,38 @@ AddEventHandler('chat:init', function()
             TriggerClientEvent('chat:addMode', source, clObj)
         end
     end
+
+    local tag = getTag(player)
+    if tag then
+        SelectedTags[player] = {
+            tag = tag.tagName,
+            color = hexToRgb(tag.hexColor)
+        }
+    end
 end)
 
 AddEventHandler('onServerResourceStart', function(resName)
-    Wait(500)
+    if resName == GetCurrentResourceName() then
+        refreshTags()
+        Wait(500)
+        for _, player in ipairs(GetPlayers()) do
+            refreshCommands(player)
+        end
 
-    for _, player in ipairs(GetPlayers()) do
-        refreshCommands(player)
+        local config = {
+            token = GetConvar('discord_bot_token', ''),
+            adminRole = Config.AdminRole,
+            tagManagerRole = Config.TagManagerRole,
+            tagListChannel = Config.TagListChannel,
+            tagManagementChannel = Config.TagManagementChannel,
+        }
+        emitNet('chat:setConfig', -1, config)
     end
 end)
+
+onNet('chat:refreshTags', () => {
+    refreshTags()
+})
 
 AddEventHandler('onResourceStop', function(resName)
     unregisterHooks(resName)
