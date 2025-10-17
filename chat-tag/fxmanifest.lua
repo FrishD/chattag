@@ -15,6 +15,6 @@ client_scripts {
     'cl_chat-tags.lua'
 }
 
-depends_on {
+dependencies {
     'chat'
 }
