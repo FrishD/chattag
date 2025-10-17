@@ -5,6 +5,8 @@ ui_page 'html/index.html'
 
 shared_script '@ox_lib/init.lua'
 
+shared_script 'config.lua'
+
 client_scripts {
     '@menuv/menuv.lua',
     'client/cl_chat.lua',
@@ -12,7 +14,6 @@ client_scripts {
 }
 
 server_scripts {
-    'config.lua',
     'server/sv_chat.lua'
 }
 
