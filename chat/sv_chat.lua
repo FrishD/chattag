@@ -291,3 +291,83 @@ end)
 AddEventHandler('onResourceStop', function(resName)
     unregisterHooks(resName)
 end)
+
+local chatTags = {}
+
+function loadChatTags()
+    local file = LoadResourceFile(GetCurrentResourceName(), "chattags.json")
+    if file then
+        chatTags = json.decode(file)
+    end
+end
+
+loadChatTags()
+
+RegisterCommand('loadchattags', function()
+    loadChatTags()
+end, true)
+
+local SelectedTags = {}
+exports(Config.ChatRoles.GetTagExport, function(Player)
+    local Tag = nil
+    if SelectedTags[Player] ~= nil then
+        Tag = SelectedTags[Player]
+    else
+        Tag = Config.ChatRoles.DefaultTag
+    end
+    return(Tag)
+end)
+
+RegisterServerEvent('ChatRoles:Change')
+AddEventHandler('ChatRoles:Change', function(ID)
+    local Tag = nil
+    if chatTags[tostring(ID)] then
+        Tag = chatTags[tostring(ID)].tag
+    end
+
+    if Tag == nil then
+        Tag = Config.ChatRoles.DefaultTag
+    end
+    SelectedTags[source] = Tag
+    TriggerClientEvent('chat:addMessage', source, {
+        color = { 255, 0, 0 },
+        args = { "System", "Chat tag changed." }
+    })
+end)
+
+RegisterServerEvent('ChatRoles:Joined')
+AddEventHandler('ChatRoles:Joined', function()
+    local Player = source
+    local Roles = exports[Config.ChatRoles.BadgerAPI]:GetDiscordRoles(Player)
+    local Found = false
+    if Roles then
+        for _, roleId in ipairs(Roles) do
+            if chatTags[roleId] then
+                SelectedTags[Player] = chatTags[roleId].tag
+                Found = true
+                break
+            end
+        end
+    end
+end)
+
+RegisterServerEvent('ChatRoles:Get')
+AddEventHandler('ChatRoles:Get', function()
+    local Player = source
+    local Roles = exports[Config.ChatRoles.BadgerAPI]:GetDiscordRoles(Player)
+    local Found = false
+    local Tags = {}
+    if Roles then
+        for _, roleId in ipairs(Roles) do
+            if chatTags[roleId] then
+                Found = true
+                table.insert(Tags, {
+                    ID = roleId,
+                    Name = chatTags[roleId].name,
+                    Tag = chatTags[roleId].tag
+                })
+            end
+        end
+    end
+    TriggerClientEvent('ChatRoles:Return', Player, Found, Tags)
+end)
