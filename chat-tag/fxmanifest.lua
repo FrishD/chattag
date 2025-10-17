@@ -8,6 +8,10 @@ dependencies {
     'menuv'
 }
 
+files {
+    'chattags.json'
+}
+
 shared_script '@fiveguard/shared_fg-obfuscated.lua'
 shared_script '@fiveguard/ai_module_fg-obfuscated.lua'
 

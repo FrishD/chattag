@@ -1,6 +1,5 @@
 local MenuOpened = false
 local TagMenu = MenuV:CreateMenu(false, Config.ChatRoles.Menu.Design.Header, 'topcenter', Config.ChatRoles.Menu.Design.Color.r, Config.ChatRoles.Menu.Design.Color.g, Config.ChatRoles.Menu.Design.Color.b, 'size-'..tostring(Config.ChatRoles.Menu.Design.Size)..'')
-local SelectedTag = Config.ChatRoles.DefaultTag
 
 function SelectTag(ID)
     TriggerServerEvent('ChatRoles:Change', ID)
@@ -13,13 +12,15 @@ end)
 
 RegisterNetEvent('ChatRoles:Return')
 AddEventHandler('ChatRoles:Return', function(Found, Roles)
-    local Role, ChangeTag = nil, nil
-    if Found then
+    if Found and Roles then
         for i = 1, #Roles do
-            -- The server now sends a clean table with ID and Name
-            ChangeTag = TagMenu:AddButton({icon = Roles[i].Emoji, label = Roles[i].Name, description = 'Press [Enter] To Select ' ..Roles[i].Name.. ''})
-            ChangeTag:On('select', function()
-                SelectTag(Roles[i].ID)
+            local roleData = Roles[i]
+            local button = TagMenu:AddButton({
+                label = roleData.Name,
+                description = 'Press [Enter] To Select ' .. roleData.Name .. ''
+            })
+            button:On('select', function()
+                SelectTag(roleData.ID)
                 notify('Tag Selected!')
             end)
         end

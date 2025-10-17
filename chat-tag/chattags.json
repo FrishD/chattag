@@ -1,0 +1,23 @@
+[
+  {
+    "roleId": "1109826341127331892",
+    "tagName": "Owner 👑 | ",
+    "hexColor": "#FF0000",
+    "ownerId": "571017358655619092",
+    "slots": 5
+  },
+  {
+    "roleId": "1109858924783472660",
+    "tagName": "Developer | ",
+    "hexColor": "#00BFFF",
+    "ownerId": "0",
+    "slots": 0
+  },
+  {
+    "roleId": "1052668934307975198",
+    "tagName": "Admin | ",
+    "hexColor": "#FFD700",
+    "ownerId": "0",
+    "slots": 0
+  }
+]
