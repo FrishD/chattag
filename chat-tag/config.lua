@@ -2,7 +2,8 @@ Config = {}
 Config.ChatRoles = {
     GetTagExport = 'GetTag', -- Example: "exports['Core']:GetTag(source)"
     Position = 'centerright',
-    DefaultTag = '^3Whitelisted🎗 | ',
+    DefaultTag = 'Whitelisted | ',
+    DefaultColor = '#F0E68C',
     BadgerAPI = 'chat',
     
     Tags = {
