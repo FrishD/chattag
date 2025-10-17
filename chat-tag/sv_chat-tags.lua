@@ -1,3 +1,14 @@
+local ChatTags = {}
+
+function LoadChatTags()
+    local file = LoadResourceFile(GetCurrentResourceName(), "chattags.json")
+    if file then
+        ChatTags = json.decode(file)
+    end
+end
+
+LoadChatTags()
+
 local SelectedTags = {}
 exports(Config.ChatRoles.GetTagExport, function(Player)
     local Tag = nil
@@ -12,9 +23,9 @@ end)
 RegisterServerEvent('ChatRoles:Change')
 AddEventHandler('ChatRoles:Change', function(ID)
     local Tag = nil
-    for i = 1, #Config.ChatRoles.Tags do
-        if Config.ChatRoles.Tags[i][1] == ID then
-            Tag = Config.ChatRoles.Tags[i][4]
+    for i = 1, #ChatTags do
+        if ChatTags[i].id == ID then
+            Tag = ChatTags[i].name
         end
     end
     if Tag == nil then
@@ -30,12 +41,12 @@ AddEventHandler('ChatRoles:Joined', function()
     local Found = false
     local Tags = {}
     if Roles then 
-        for i = 1, #Config.ChatRoles.Tags do
-            local TagRole = Config.ChatRoles.Tags[i]
+        for i = 1, #ChatTags do
+            local TagRole = ChatTags[i]
             for i = 1, #Roles do
                 local MyRole = Roles[i]
-                if tonumber(MyRole) == tonumber(TagRole[1]) then
-                    SelectedTags[Player] = TagRole[4]
+                if tonumber(MyRole) == tonumber(TagRole.id) then
+                    SelectedTags[Player] = TagRole.name
                     Found = true
                 end
             end
@@ -53,15 +64,16 @@ AddEventHandler('ChatRoles:Get', function()
     local Found = false
     local Tags = {}
     if Roles then 
-        for i = 1, #Config.ChatRoles.Tags do
-            local TagRole = Config.ChatRoles.Tags[i]
+        for i = 1, #ChatTags do
+            local TagRole = ChatTags[i]
             for i = 1, #Roles do
                 local MyRole = Roles[i]
-                if tonumber(MyRole) == tonumber(TagRole[1]) then
+                if tonumber(MyRole) == tonumber(TagRole.id) then
                     Found = true
                     table.insert(Tags, {
-                        ID = TagRole[1],
-                        Name = TagRole[3]
+                        ID = TagRole.id,
+                        Name = TagRole.name,
+                        Color = TagRole.color
                     })
                 end
             end

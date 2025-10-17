@@ -16,7 +16,8 @@ AddEventHandler('ChatRoles:Return', function(Found, Roles)
     local Role, ChangeTag = nil, nil
     if Found then
         for i = 1, #Roles do
-            ChangeTag = TagMenu:AddButton({icon = Roles[i].Emoji, label = Roles[i].Name, description = 'Press [Enter] To Select ' ..Roles[i].Name.. ''})
+            local r, g, b = tonumber("0x" .. Roles[i].Color:sub(2,3)), tonumber("0x" .. Roles[i].Color:sub(4,5)), tonumber("0x" .. Roles[i].Color:sub(6,7))
+            ChangeTag = TagMenu:AddButton({icon = Roles[i].Emoji, label = Roles[i].Name, description = 'Press [Enter] To Select ' ..Roles[i].Name.. '', color = {r, g, b}})
             ChangeTag:On('select', function()
                 SelectTag(Roles[i].ID)
                 notify('Tag Selected!') 
